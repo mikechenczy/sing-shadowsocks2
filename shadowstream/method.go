@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/md5"
 	"crypto/rc4"
+	chacha202 "github.com/codahale/chacha20"
 	"net"
 	"os"
 
@@ -18,6 +19,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
+	_ "github.com/codahale/chacha20"
 	"golang.org/x/crypto/chacha20"
 )
 
@@ -31,6 +33,7 @@ var MethodList = []string{
 	"rc4-md5",
 	"chacha20-ietf",
 	"xchacha20",
+	"chacha20",
 }
 
 func init() {
@@ -110,6 +113,17 @@ func NewMethod(ctx context.Context, methodName string, options C.MethodOptions) 
 		}
 		m.decryptConstructor = func(key []byte, salt []byte) (cipher.Stream, error) {
 			return chacha20.NewUnauthenticatedCipher(key, salt)
+		}
+	case "chacha20":
+		m.keyLength = chacha202.KeySize
+		m.saltLength = chacha202.NonceSize
+		m.encryptConstructor = func(key []byte, salt []byte) (cipher.Stream, error) {
+			// 使用 chacha20.NewCipher 创建加密流
+			return chacha202.New(key, salt)
+		}
+		m.decryptConstructor = func(key []byte, salt []byte) (cipher.Stream, error) {
+			// 使用 chacha20.NewCipher 创建解密流
+			return chacha202.New(key, salt)
 		}
 	default:
 		return nil, os.ErrInvalid

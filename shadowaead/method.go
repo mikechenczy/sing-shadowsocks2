@@ -107,15 +107,12 @@ func (m *Method) DialPacketConn(conn net.Conn) N.NetPacketConn {
 	}
 }
 
-var _ N.ExtendedConn = (*clientConn)(nil)
-
 type clientConn struct {
 	net.Conn
-	method          *Method
-	destination     M.Socksaddr
-	reader          *shadowio.Reader
-	readWaitOptions N.ReadWaitOptions
-	writer          *shadowio.Writer
+	method      *Method
+	destination M.Socksaddr
+	reader      *shadowio.Reader
+	writer      *shadowio.Writer
 	shadowio.WriterInterface
 }
 
@@ -163,9 +160,7 @@ func (c *clientConn) readResponse() error {
 	if err != nil {
 		return err
 	}
-	reader := shadowio.NewReader(c.Conn, readCipher)
-	reader.InitializeReadWaiter(c.readWaitOptions)
-	c.reader = reader
+	c.reader = shadowio.NewReader(c.Conn, readCipher)
 	return nil
 }
 
@@ -187,6 +182,16 @@ func (c *clientConn) ReadBuffer(buffer *buf.Buffer) error {
 		}
 	}
 	return c.reader.ReadBuffer(buffer)
+}
+
+func (c *clientConn) ReadBufferThreadSafe() (buffer *buf.Buffer, err error) {
+	if c.reader == nil {
+		err = c.readResponse()
+		if err != nil {
+			return
+		}
+	}
+	return c.reader.ReadBufferThreadSafe()
 }
 
 func (c *clientConn) Write(p []byte) (n int, err error) {
@@ -232,10 +237,6 @@ func (c *clientPacketConn) ReadPacket(buffer *buf.Buffer) (destination M.Socksad
 	if err != nil {
 		return
 	}
-	return c.readPacket(buffer)
-}
-
-func (c *clientPacketConn) readPacket(buffer *buf.Buffer) (destination M.Socksaddr, err error) {
 	if buffer.Len() < c.method.keySaltLength {
 		return M.Socksaddr{}, C.ErrPacketTooShort
 	}
@@ -347,14 +348,6 @@ func (c *clientPacketConn) FrontHeadroom() int {
 
 func (c *clientPacketConn) RearHeadroom() int {
 	return shadowio.Overhead
-}
-
-func (c *clientPacketConn) ReaderMTU() int {
-	return MaxPacketSize
-}
-
-func (c *clientPacketConn) WriterMTU() int {
-	return MaxPacketSize
 }
 
 func (c *clientPacketConn) Upstream() any {
